@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.MediaStore.Audio.Media
 import android.provider.Settings
 import android.view.View
 import android.widget.Toast
@@ -26,6 +27,7 @@ import com.karumi.dexter.PermissionToken
 import com.karumi.dexter.listener.PermissionRequest
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener
 import kotlinx.android.synthetic.main.activity_add_happy.*
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -51,7 +53,7 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
         }
     }
 
-    val startForResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    private val startForResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             result: ActivityResult ->
         if (result.resultCode == Activity.RESULT_OK) {
             val intent = result.data
@@ -59,6 +61,22 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
             iv_place_image.setImageBitmap(thumbnail)
         }
     }
+    private val startGalleryForResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            result: ActivityResult ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val intent = result.data
+            if(intent != null) {
+                try {
+                    val selectedImageBitmap = MediaStore.Images.Media.getBitmap(this.contentResolver, intent.data)
+                    iv_place_image.setImageBitmap(selectedImageBitmap)
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+
 
     companion object {
         private const val CAMERA_PERMISSION_CODE = 1
@@ -128,7 +146,8 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
             .withListener(object: MultiplePermissionsListener {
                 override fun onPermissionsChecked(report: MultiplePermissionsReport?) {
                     if(report!!.areAllPermissionsGranted()) {
-                        Toast.makeText(this@AddHappyActivity, "Storage READ/WRITE permissions are granted. Now you can select an image from gallery", Toast.LENGTH_SHORT).show()
+                        val galleryIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+                        startGalleryForResult.launch(galleryIntent)
                     }
                 }
                 override fun onPermissionRationaleShouldBeShown(permissions: List<PermissionRequest>, token: PermissionToken) {
@@ -146,7 +165,6 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
                 }
                 shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) -> {
                     showRationaleDialogForPermissions()
-                    Toast.makeText(this@AddHappyActivity, "showRationaleDialogForPermissions 2", Toast.LENGTH_SHORT).show()
                 }
                 else -> {
                     requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)

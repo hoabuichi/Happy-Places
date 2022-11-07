@@ -5,6 +5,8 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -27,7 +29,10 @@ import com.karumi.dexter.PermissionToken
 import com.karumi.dexter.listener.PermissionRequest
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener
 import kotlinx.android.synthetic.main.activity_add_happy.*
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -58,6 +63,7 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
         if (result.resultCode == Activity.RESULT_OK) {
             val intent = result.data
             val thumbnail: Bitmap = intent!!.extras!!.get("data") as Bitmap
+            saveImageToInternalStorage(bitmap = thumbnail)
             iv_place_image.setImageBitmap(thumbnail)
         }
     }
@@ -68,6 +74,7 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
             if(intent != null) {
                 try {
                     val selectedImageBitmap = MediaStore.Images.Media.getBitmap(this.contentResolver, intent.data)
+                    saveImageToInternalStorage(bitmap = selectedImageBitmap)
                     iv_place_image.setImageBitmap(selectedImageBitmap)
                 } catch (e: IOException) {
                     e.printStackTrace()
@@ -76,11 +83,28 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
         }
     }
 
+    private fun saveImageToInternalStorage(bitmap: Bitmap): Uri
+    {
+        val wrapper = ContextWrapper(applicationContext)
+        var file = wrapper.getDir(IMAGE_DIRECTORY, Context.MODE_PRIVATE)
+        file = File(file, "${UUID.randomUUID()}.jpg")
 
+        try {
+            val stream: OutputStream = FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+            stream.flush()
+            stream.close()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+
+        return Uri.parse(file.absolutePath)
+    }
 
     companion object {
         private const val CAMERA_PERMISSION_CODE = 1
         private const val CAMERA_REQUEST_CODE = 2
+        private const val IMAGE_DIRECTORY = "HappyPlacesImages"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

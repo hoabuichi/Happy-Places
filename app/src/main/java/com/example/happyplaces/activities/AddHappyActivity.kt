@@ -1,4 +1,4 @@
-package com.example.happyplaces
+package com.example.happyplaces.activities
 
 import android.Manifest
 import android.app.Activity
@@ -14,7 +14,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.provider.MediaStore.Audio.Media
 import android.provider.Settings
 import android.view.View
 import android.widget.Toast
@@ -22,13 +21,17 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.google.android.material.internal.ManufacturerUtils
+import com.example.happyplaces.R
+import com.example.happyplaces.database.DatabaseHandler
+import com.example.happyplaces.models.HappyPlaceModel
 import com.karumi.dexter.Dexter
 import com.karumi.dexter.MultiplePermissionsReport
 import com.karumi.dexter.PermissionToken
 import com.karumi.dexter.listener.PermissionRequest
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener
 import kotlinx.android.synthetic.main.activity_add_happy.*
+import kotlinx.android.synthetic.main.activity_add_happy.iv_place_image
+import kotlinx.android.synthetic.main.activity_happy_place_detail.*
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -41,6 +44,12 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
 
     private var cal = Calendar.getInstance()
     private lateinit var dateSetListener: DatePickerDialog.OnDateSetListener
+    private var saveImageToInternalStorage: Uri? = null
+    private var mLatitude: Double = 0.0
+    private var mLongitude: Double = 0.0
+
+    private var mHappyPlaceDetails: HappyPlaceModel? = null
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -63,7 +72,7 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
         if (result.resultCode == Activity.RESULT_OK) {
             val intent = result.data
             val thumbnail: Bitmap = intent!!.extras!!.get("data") as Bitmap
-            saveImageToInternalStorage(bitmap = thumbnail)
+            saveImageToInternalStorage = saveImageToInternalStorage(bitmap = thumbnail)
             iv_place_image.setImageBitmap(thumbnail)
         }
     }
@@ -74,7 +83,7 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
             if(intent != null) {
                 try {
                     val selectedImageBitmap = MediaStore.Images.Media.getBitmap(this.contentResolver, intent.data)
-                    saveImageToInternalStorage(bitmap = selectedImageBitmap)
+                    saveImageToInternalStorage = saveImageToInternalStorage(bitmap = selectedImageBitmap)
                     iv_place_image.setImageBitmap(selectedImageBitmap)
                 } catch (e: IOException) {
                     e.printStackTrace()
@@ -116,6 +125,20 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
             onBackPressed()
         }
 
+        if(intent.hasExtra(MainActivity.EXTRA_PLACE_DETAIL)) {
+            mHappyPlaceDetails = intent.getParcelableExtra(MainActivity.EXTRA_PLACE_DETAIL) as HappyPlaceModel?
+        }
+
+        if(mHappyPlaceDetails != null) {
+            supportActionBar?.title = "Edit Happy Place"
+            et_title.setText(mHappyPlaceDetails!!.title)
+            iv_place_image.setImageURI(Uri.parse(mHappyPlaceDetails!!.image))
+            saveImageToInternalStorage = Uri.parse(mHappyPlaceDetails!!.image)
+            et_description.setText(mHappyPlaceDetails!!.description)
+            et_location.setText(mHappyPlaceDetails!!.location)
+            btn_save.text = "UPDATE"
+        }
+
         dateSetListener = DatePickerDialog.OnDateSetListener {
             view, year, month, dayOfMonth ->
             cal.set(Calendar.YEAR, year)
@@ -124,7 +147,7 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
 
             updateDateInView()
         }
-
+        updateDateInView()
         et_date.setOnClickListener(this)
         tv_add_image.setOnClickListener(this)
         btn_save.setOnClickListener(this)
@@ -158,7 +181,52 @@ class AddHappyActivity : AppCompatActivity(), View.OnClickListener {
                 pictureDialog.show()
             }
             R.id.btn_save -> {
-                Toast.makeText(this@AddHappyActivity, "Camera selection coming soon", Toast.LENGTH_SHORT).show()
+                when {
+                    et_title.text.isNullOrEmpty() -> {
+                        Toast.makeText(this@AddHappyActivity, "Please enter title", Toast.LENGTH_SHORT).show()
+                    }
+                    et_description.text.isNullOrEmpty() -> {
+                        Toast.makeText(this@AddHappyActivity, "Please enter description", Toast.LENGTH_SHORT).show()
+                    }
+                    et_location.text.isNullOrEmpty() -> {
+                        Toast.makeText(this@AddHappyActivity, "Please enter location", Toast.LENGTH_SHORT).show()
+                    }
+                    saveImageToInternalStorage == null -> {
+                        Toast.makeText(this@AddHappyActivity, "Please select an image", Toast.LENGTH_SHORT).show()
+                    }
+                    else -> {
+                        val happyPlaceModel = HappyPlaceModel(
+                            if(mHappyPlaceDetails == null) 0 else mHappyPlaceDetails!!.id,
+                            et_title.text.toString(),
+                            saveImageToInternalStorage.toString(),
+                            et_description.text.toString(),
+                            et_date.text.toString(),
+                            et_location.text.toString(),
+                            mLatitude,
+                            mLongitude
+                        )
+
+                        val dbHandler = DatabaseHandler(this)
+
+                        if(mHappyPlaceDetails == null) {
+                            val addHappyPlaceResult = dbHandler.addHappyPlace(happyPlaceModel)
+
+                            if(addHappyPlaceResult > 0) {
+                                setResult(Activity.RESULT_OK)
+                                finish()
+                            }
+                        } else {
+                            val updateHappyPlaceResult = dbHandler.updateHappyPlace(happyPlaceModel)
+
+                            if(updateHappyPlaceResult > 0) {
+                                setResult(Activity.RESULT_OK)
+                                finish()
+                            }
+                        }
+
+                    }
+                }
+
             }
         }
     }
